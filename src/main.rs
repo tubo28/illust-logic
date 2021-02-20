@@ -4,7 +4,7 @@ use std::{collections::VecDeque, io::*, mem::swap, str::FromStr};
 type Mask = u64;
 type Hint = usize;
 
-fn search_impl(
+fn line_search_impl(
     width: usize,
     cur: Mask,
     pos: usize,
@@ -29,7 +29,7 @@ fn search_impl(
                         && !set_bit(filled, i + hint)
                         && subset_bit(next, filled & cur_head)
                     {
-                        search_impl(
+                        line_search_impl(
                             width,
                             next,
                             i + hint + 1,
@@ -46,25 +46,34 @@ fn search_impl(
 }
 
 #[test]
-fn search_works() {
+fn line_search_works() {
     assert_eq!(
-        search(8, &[2, 3], 0b0000_0000, 0b0000_0000),
+        line_search(8, &[2, 3], 0b0000_0000, 0b0000_0000),
         [0b00111011, 0b01110011, 0b11100011, 0b01110110, 0b11100110, 0b11101100]
     );
     assert_eq!(
-        search(8, &[2, 3], 0b0000_0000, 0b0000_0100),
+        line_search(8, &[2, 3], 0b0000_0000, 0b0000_0100),
         [0b01110110, 0b11100110, 0b11101100]
+    );
+    assert_eq!(
+        line_search(8, &[], 0b0000_0000, 0b0000_0000),
+        [0b0000_0000]
+    );
+    // no solution
+    assert_eq!(
+        line_search(8, &[3,3,3], 0b0000_0000, 0b0000_0000),
+        []
     );
 }
 
-fn search(width: usize, hints: &[Hint], empty: Mask, filled: Mask) -> Vec<Mask> {
+fn line_search(width: usize, hints: &[Hint], empty: Mask, filled: Mask) -> Vec<Mask> {
     let mut result = Vec::<Mask>::new();
-    search_impl(width, 0, 0, hints, empty, filled, &mut result);
+    line_search_impl(width, 0, 0, hints, empty, filled, &mut result);
     result
 }
 
-fn search_row(input: &Input, state: &State, row: usize) -> Vec<Mask> {
-    search(
+fn search_line(input: &Input, state: &State, row: usize) -> Vec<Mask> {
+    line_search(
         input.width,
         &input.row_hints[row],
         state.empty[row],
@@ -224,7 +233,7 @@ fn solve(input: &Input) {
     while let Some(head) = queue.pop_front() {
         match head {
             ActiveLine::Row(row) => {
-                let candidates = search_row(input, &state, row);
+                let candidates = search_line(input, &state, row);
                 let updated = apply_search_row_result(&mut state, input, row, &candidates);
 
                 row_active[row] = false;
@@ -237,7 +246,7 @@ fn solve(input: &Input) {
             }
             ActiveLine::Column(column) => {
                 let mut flipped_state = state.flip();
-                let candidates = search_row(&flipped_input, &flipped_state, column);
+                let candidates = search_line(&flipped_input, &flipped_state, column);
                 let updated =
                     apply_search_row_result(&mut flipped_state, input, column, &candidates);
                 state = flipped_state.flip();
