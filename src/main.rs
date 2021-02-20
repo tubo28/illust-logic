@@ -1,9 +1,9 @@
-use std::str::FromStr;
 use std::{
     collections::{BTreeSet, HashSet, VecDeque},
     io::*,
     unimplemented,
 };
+use std::{mem::swap, str::FromStr};
 
 type Mask = u64;
 type BlockSize = usize;
@@ -78,7 +78,7 @@ fn search_column(input: &Input, column: usize, empty: Mask, filled: Mask) -> Vec
     search(input.height, &input.column_blocks[column], empty, filled)
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 struct Input {
     width: usize,
     height: usize,
@@ -121,9 +121,18 @@ impl Input {
             .collect();
         token.parse().ok().expect("failed to parse token")
     }
+
+    fn flip(&self) -> Input {
+        let mut result = self.clone();
+        swap(&mut result.height, &mut result.width);
+        swap(&mut result.row_blocks, &mut result.column_blocks);
+        result
+    }
 }
 
 struct State {
+    height: usize,
+    width: usize,
     empty: Vec<Mask>,
     filled: Vec<Mask>,
 }
@@ -132,9 +141,31 @@ impl State {
     fn new(height: usize, width: usize) -> State {
         assert!(width < std::mem::size_of::<Mask>() * 8);
         State {
+            height: height,
+            width: width,
             empty: vec![0; height],
             filled: vec![0; height],
         }
+    }
+
+    fn flip(&self) -> State {
+        let mut result = State {
+            height: self.width,
+            width: self.height,
+            empty: vec![0; self.width],
+            filled: vec![0; self.width],
+        };
+        for i in 0..self.height {
+            for j in 0..self.width {
+                if set_bit(self.empty[i], j) {
+                    result.empty[j] |= 1 << i;
+                }
+                if set_bit(self.filled[i], j) {
+                    result.filled[j] |= 1 << i;
+                }
+            }
+        }
+        result
     }
 }
 
@@ -171,6 +202,8 @@ enum SearchObject {
 }
 
 fn solve(input: &Input) {
+    let flipped_input = input.flip();
+
     let mut state = State::new(input.height, input.width);
     let mut row_active = vec![true; input.height];
     let mut col_active = vec![true; input.width];
@@ -178,36 +211,38 @@ fn solve(input: &Input) {
     for i in 0..input.height {
         queue.push_back(SearchObject::Row(i));
     }
-    for col in 0..input.width {
-        queue.push_back(SearchObject::Column(col));
+    for j in 0..input.width {
+        queue.push_back(SearchObject::Column(j));
     }
 
     while let Some(head) = queue.pop_front() {
         match head {
             SearchObject::Row(row) if row_active[row] => {
                 let candidates = search_row(input, &state, row);
-                assert!(!candidates.is_empty());
-                let and = candidates
-                    .iter()
-                    .fold(all_bit(input.width), |acc, &x| acc & x);
-                let or = candidates.iter().fold(0, |acc, &x| acc | x);
-                for m in candidates.iter() {
-                    println!("{:010b}", m)
-                }
-                println!("and: {}", and);
-                state.filled[row] |= and;
-                state.empty[row] |= !or & all_bit(input.width);
-                assert!(state.filled[row] & state.empty[row] == 0);
+                apply_search_result(&mut state, input, row, &candidates);
             }
             SearchObject::Column(column) if col_active[column] => {
-                // let candidates = search_column(input, column, empty[column], filled[column]);
-                // filled[column] |= candidates.iter().fold(0, |acc, &x| acc | x);
-                // assert!(filled[column] | empty[column] == 0);
+                let mut flipped_state = state.flip();
+                let candidates = search_row(&flipped_input, &flipped_state, column);
+                println!("{}", candidates.len());
+                apply_search_result(&mut flipped_state, input, column, &candidates);
+                state = flipped_state.flip();
             }
             _ => continue,
         }
         print(input, &state)
     }
+}
+
+fn apply_search_result(state: &mut State, input: &Input, row: usize, candidates: &[Mask]) {
+    assert!(!candidates.is_empty());
+    let and = candidates
+        .iter()
+        .fold(all_bit(input.width), |acc, &x| acc & x);
+    let or = candidates.iter().fold(0, |acc, &x| acc | x);
+    state.filled[row] |= and;
+    state.empty[row] |= !or & all_bit(input.width);
+    assert!(state.filled[row] & state.empty[row] == 0);
 }
 
 fn print(input: &Input, state: &State) {
@@ -226,12 +261,13 @@ fn print(input: &Input, state: &State) {
     }
     for i in 0..input.height {
         for j in 0..input.width {
-            grid[i * 2 + 1][j * 2 + 1] = match (set_bit(state.filled[i], j), set_bit(state.empty[i], j)) {
-                (true, false) => 'o',
-                (false, true) => 'x',
-                (false, false) => ' ',
-                (true, true) => panic!(),
-            }
+            grid[i * 2 + 1][j * 2 + 1] =
+                match (set_bit(state.filled[i], j), set_bit(state.empty[i], j)) {
+                    (true, false) => 'o',
+                    (false, true) => 'x',
+                    (false, false) => ' ',
+                    (true, true) => panic!(),
+                }
         }
     }
     for i in 0..h {
