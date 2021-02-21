@@ -105,14 +105,33 @@ impl State {
         }
         true
     }
+
+    pub fn to_solution(&self) -> Solution {
+        let mut result = vec![vec![Cell::Black; self.width]; self.height];
+        for i in 0..self.height {
+            for j in 0..self.width {
+                result[i][j] = if set(self.white[i], j) {
+                    Cell::White
+                } else if set(self.black[i], j) {
+                    Cell::Black
+                } else {
+                    panic!("empty cell exists");
+                }
+            }
+        }
+        result
+    }
 }
 
-pub enum Solution {
-    Solved(State),
-    Impossible,
+#[derive(Clone, Copy)]
+pub enum Cell {
+    Black,
+    White,
 }
 
-pub fn print(input: &Input, state: &State) {
+pub type Solution = Vec<Vec<Cell>>;
+
+pub fn print(input: &Input, solution: &Solution) {
     let h = input.height * 2 + 1;
     let w = input.width * 2 + 1;
     let mut grid = vec![vec![' '; w]; h];
@@ -128,18 +147,16 @@ pub fn print(input: &Input, state: &State) {
     }
     for i in 0..input.height {
         for j in 0..input.width {
-            grid[i * 2 + 1][j * 2 + 1] = match (set(state.black[i], j), set(state.white[i], j)) {
-                (true, false) => '#',
-                (false, true) => '/',
-                (false, false) => ' ',
-                (true, true) => panic!(),
+            grid[i * 2 + 1][j * 2 + 1] = match solution[i][j] {
+                Cell::White => ' ',
+                Cell::Black => 'x',
             }
         }
     }
     for i in 0..h {
         for j in 0..w {
-            if grid[i][j] == '#' {
-                print!("{}", "#".cyan().bold());
+            if grid[i][j] == 'x' {
+                print!("{}", "x".cyan().bold());
             } else {
                 print!("{}", grid[i][j]);
             }

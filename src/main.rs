@@ -7,8 +7,9 @@ use common::*;
 
 fn main() {
     let input = Input::from_stdin();
-    let solution = backtrack::solve(&input);
-    if let Solution::Solved(state) = solution {
-        print(&input, &state);
+    if let Some(solution) = backtrack::solve(&input) {
+        print(&input, &solution);
+    } else {
+        println!("impossible");
     }
 }

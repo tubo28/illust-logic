@@ -2,7 +2,7 @@ use crate::common::*;
 use crate::search_line::*;
 
 /// constraints: state はライン埋め済み and 無矛盾 and not solved
-fn solve_combined(input: &Input, state: &State) -> Solution {
+fn solve_combined(input: &Input, state: &State) -> Option<Solution> {
     assert!(deterministic_fill(input, state).as_ref() == Some(state));
     assert!(!state.solved(input));
 
@@ -18,7 +18,7 @@ fn solve_combined(input: &Input, state: &State) -> Solution {
                         // 矛盾は見つからなかった
                         if filled_state.solved(input) {
                             // 答えまでたどり着いたので解の唯一性によって黒に確定する
-                            return Solution::Solved(filled_state);
+                            return Some(filled_state.to_solution());
                         } else {
                             // 中途半端に終わったので成果なし
                         }
@@ -32,18 +32,18 @@ fn solve_combined(input: &Input, state: &State) -> Solution {
             }
         }
     }
-    Solution::Impossible
+    None
 }
 
-pub fn solve(input: &Input) -> Solution {
+pub fn solve(input: &Input) -> Option<Solution> {
     let state = State::new(input.height, input.width);
     if let Some(state) = deterministic_fill(&input, &state) {
         if state.solved(&input) {
-            Solution::Solved(state)
+            Some(state.to_solution())
         } else {
             solve_combined(&input, &state)
         }
     } else {
-        Solution::Impossible
+        None
     }
 }
