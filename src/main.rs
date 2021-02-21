@@ -1,21 +1,21 @@
 use colored::*;
 use std::{collections::VecDeque, io::*, mem::swap, str::FromStr};
 
-type Mask = u64;
-type Hint = usize;
+type Mask = u64; // bit-mask of board
+type Hint = usize; // size of continuous black blocks
 
-fn line_search_impl(
+fn search_line_sub_dfs(
     width: usize,
     cur: Mask,
     pos: usize,
     hints: &[Hint],
-    empty: Mask,
-    filled: Mask,
+    white: Mask,
+    black: Mask,
     result: &mut Vec<Mask>,
 ) {
     match hints.first() {
         None => {
-            if subset_bit(cur, filled) {
+            if subset_bit(cur, black) {
                 result.push(cur);
             }
         }
@@ -25,17 +25,17 @@ fn line_search_impl(
                 if i + hint <= width {
                     let next = cur | mask << i;
                     let cur_head = all_bit(hint + i);
-                    if distinct_bit(empty, next)
-                        && !set_bit(filled, i + hint)
-                        && subset_bit(next, filled & cur_head)
+                    if distinct_bit(white, next)
+                        && !set_bit(black, i + hint)
+                        && subset_bit(next, black & cur_head)
                     {
-                        line_search_impl(
+                        search_line_sub_dfs(
                             width,
                             next,
                             i + hint + 1,
                             &hints[1..],
-                            empty,
-                            filled,
+                            white,
+                            black,
                             result,
                         );
                     }
@@ -46,38 +46,34 @@ fn line_search_impl(
 }
 
 #[test]
-fn line_search_works() {
+fn search_line_sub_works() {
     assert_eq!(
-        line_search(8, &[2, 3], 0b0000_0000, 0b0000_0000),
+        search_line_sub(8, &[2, 3], 0b0000_0000, 0b0000_0000),
         [0b00111011, 0b01110011, 0b11100011, 0b01110110, 0b11100110, 0b11101100]
     );
     assert_eq!(
-        line_search(8, &[2, 3], 0b0000_0000, 0b0000_0100),
+        search_line_sub(8, &[2, 3], 0b0000_0000, 0b0000_0100),
         [0b01110110, 0b11100110, 0b11101100]
     );
     assert_eq!(
-        line_search(8, &[], 0b0000_0000, 0b0000_0000),
+        search_line_sub(8, &[], 0b0000_0000, 0b0000_0000),
         [0b0000_0000]
     );
     // no solution
-    assert_eq!(
-        line_search(8, &[3,3,3], 0b0000_0000, 0b0000_0000),
-        []
-    );
+    assert_eq!(search_line_sub(8, &[3, 3, 3], 0b0000_0000, 0b0000_0000), []);
 }
-
-fn line_search(width: usize, hints: &[Hint], empty: Mask, filled: Mask) -> Vec<Mask> {
+fn search_line_sub(width: usize, hints: &[Hint], white: Mask, black: Mask) -> Vec<Mask> {
     let mut result = Vec::<Mask>::new();
-    line_search_impl(width, 0, 0, hints, empty, filled, &mut result);
+    search_line_sub_dfs(width, 0, 0, hints, white, black, &mut result);
     result
 }
 
 fn search_line(input: &Input, state: &State, row: usize) -> Vec<Mask> {
-    line_search(
+    search_line_sub(
         input.width,
         &input.row_hints[row],
-        state.empty[row],
-        state.filled[row],
+        state.white[row],
+        state.black[row],
     )
 }
 
@@ -133,11 +129,12 @@ impl Input {
     }
 }
 
+#[derive(PartialEq, Clone)]
 struct State {
     height: usize,
     width: usize,
-    empty: Vec<Mask>,
-    filled: Vec<Mask>,
+    white: Vec<Mask>,
+    black: Vec<Mask>,
 }
 
 impl State {
@@ -146,8 +143,8 @@ impl State {
         State {
             height: height,
             width: width,
-            empty: vec![0; height],
-            filled: vec![0; height],
+            white: vec![0; height],
+            black: vec![0; height],
         }
     }
 
@@ -155,20 +152,29 @@ impl State {
         let mut result = State {
             height: self.width,
             width: self.height,
-            empty: vec![0; self.width],
-            filled: vec![0; self.width],
+            white: vec![0; self.width],
+            black: vec![0; self.width],
         };
         for i in 0..self.height {
             for j in 0..self.width {
-                if set_bit(self.empty[i], j) {
-                    result.empty[j] |= 1 << i;
+                if set_bit(self.white[i], j) {
+                    result.white[j] |= 1 << i;
                 }
-                if set_bit(self.filled[i], j) {
-                    result.filled[j] |= 1 << i;
+                if set_bit(self.black[i], j) {
+                    result.black[j] |= 1 << i;
                 }
             }
         }
         result
+    }
+
+    fn solved(&self, input: &Input) -> bool {
+        for (a, b) in input.row_hints.iter().zip(self.black.iter()) {
+            if a.iter().sum::<usize>() != b.count_ones() as usize {
+                return false;
+            }
+        }
+        true
     }
 }
 
@@ -216,10 +222,11 @@ enum ActiveLine {
     Column(usize),
 }
 
-fn solve(input: &Input) {
+fn deterministic_fill(input: &Input, state: &State) -> Option<State> {
+    let mut state = state.clone();
     let flipped_input = input.flip();
 
-    let mut state = State::new(input.height, input.width);
+    //let mut state = State::new(input.height, input.width);
     let mut row_active = vec![true; input.height];
     let mut column_active = vec![true; input.width];
     let mut queue = VecDeque::new();
@@ -234,6 +241,9 @@ fn solve(input: &Input) {
         match head {
             ActiveLine::Row(row) => {
                 let candidates = search_line(input, &state, row);
+                if candidates.is_empty() {
+                    return None;
+                }
                 let updated = apply_search_row_result(&mut state, input, row, &candidates);
 
                 row_active[row] = false;
@@ -247,6 +257,9 @@ fn solve(input: &Input) {
             ActiveLine::Column(column) => {
                 let mut flipped_state = state.flip();
                 let candidates = search_line(&flipped_input, &flipped_state, column);
+                if candidates.is_empty() {
+                    return None;
+                }
                 let updated =
                     apply_search_row_result(&mut flipped_state, input, column, &candidates);
                 state = flipped_state.flip();
@@ -261,10 +274,10 @@ fn solve(input: &Input) {
             }
         }
     }
-    print(input, &state)
+    Some(state)
 }
 
-// returns updated bits
+/// returns updated bits
 fn apply_search_row_result(
     state: &mut State,
     input: &Input,
@@ -272,19 +285,59 @@ fn apply_search_row_result(
     candidates: &[Mask],
 ) -> Mask {
     assert!(!candidates.is_empty());
-    let must_fill = candidates
+    let must_black = candidates
         .iter()
         .fold(all_bit(input.width), |acc, &x| acc & x);
-    let must_empty = !candidates.iter().fold(0, |acc, &x| acc | x);
-    let must_empty = must_empty & all_bit(input.width);
+    let must_white = !candidates.iter().fold(0, |acc, &x| acc | x);
+    let must_white = must_white & all_bit(input.width);
 
-    let filled = minus_bit(must_fill, state.filled[row]);
-    let removed = minus_bit(must_empty, state.empty[row]);
-    state.filled[row] |= must_fill;
-    state.empty[row] |= must_empty;
-    assert!(state.filled[row] & state.empty[row] == 0);
+    let new_black = minus_bit(must_black, state.black[row]);
+    let new_white = minus_bit(must_white, state.white[row]);
+    state.black[row] |= must_black;
+    state.white[row] |= must_white;
+    assert!(state.black[row] & state.white[row] == 0);
 
-    filled | removed
+    new_black | new_white
+}
+
+enum Solution {
+    Solved(State),
+    Impossible,
+}
+
+/// constraints: state はライン埋め済み and 無矛盾 and not solved
+fn solve_combined(input: &Input, state: &State) -> Solution {
+    print(input, state);
+    assert!(deterministic_fill(input, state).as_ref() == Some(state));
+    assert!(!state.solved(input));
+
+    // todo: 仮置きの順番をいい感じにする
+    for i in 0..input.height {
+        for j in 0..input.width {
+            if state.black[i] >> j & 1 == 0 && state.white[i] >> j & 1 == 0 {
+                {
+                    // (i, j) を黒と仮定する
+                    let mut new_state = state.clone();
+                    new_state.black[i] |= 1 << j;
+                    if let Some(filled_state) = deterministic_fill(input, &new_state) {
+                        // 矛盾は見つからなかった
+                        if filled_state.solved(input) {
+                            // 答えまでたどり着いたので解の唯一性によって黒に確定する
+                            return Solution::Solved(filled_state);
+                        } else {
+                            // 中途半端に終わったので成果なし
+                        }
+                    } else {
+                        // 矛盾が見つかったので白に確定する
+                        let mut new_state2 = state.clone();
+                        new_state2.white[i] |= 1 << j;
+                        return solve_combined(input, &new_state2);
+                    }
+                }
+            }
+        }
+    }
+    Solution::Impossible
 }
 
 fn print(input: &Input, state: &State) {
@@ -304,7 +357,7 @@ fn print(input: &Input, state: &State) {
     for i in 0..input.height {
         for j in 0..input.width {
             grid[i * 2 + 1][j * 2 + 1] =
-                match (set_bit(state.filled[i], j), set_bit(state.empty[i], j)) {
+                match (set_bit(state.black[i], j), set_bit(state.white[i], j)) {
                     (true, false) => '#',
                     (false, true) => '/',
                     (false, false) => ' ',
@@ -326,5 +379,20 @@ fn print(input: &Input, state: &State) {
 
 fn main() {
     let input = Input::from_stdin();
-    solve(&input);
+    let state = State::new(input.height, input.width);
+    if let Some(state) = deterministic_fill(&input, &state) {
+        print(&input, &state);
+        if state.solved(&input) {
+            print(&input, &state);
+        } else {
+            match solve_combined(&input, &state) {
+                Solution::Solved(state) => {
+                    print(&input, &state);
+                }
+                Solution::Impossible => {
+                    println!("impossible");
+                }
+            }
+        }
+    }
 }
