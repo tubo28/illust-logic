@@ -7,13 +7,13 @@ fn search_line_sub_dfs(
     cur: Mask,
     pos: usize,
     hints: &[Hint],
-    white: Mask,
-    black: Mask,
+    must_white: Mask,
+    must_black: Mask,
     result: &mut Vec<Mask>,
 ) {
     match hints.first() {
         None => {
-            if subset_bit(cur, black) {
+            if subset(cur, must_black) {
                 result.push(cur);
             }
         }
@@ -23,17 +23,17 @@ fn search_line_sub_dfs(
                 if i + hint <= width {
                     let next = cur | mask << i;
                     let cur_head = all(hint + i);
-                    if distinct(white, next)
-                        && !set(black, i + hint)
-                        && subset_bit(next, black & cur_head)
+                    if distinct(must_white, next)
+                        && !set(must_black, i + hint)
+                        && subset(next, must_black & cur_head)
                     {
                         search_line_sub_dfs(
                             width,
                             next,
                             i + hint + 1,
                             &hints[1..],
-                            white,
-                            black,
+                            must_white,
+                            must_black,
                             result,
                         );
                     }

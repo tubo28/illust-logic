@@ -11,11 +11,11 @@ pub fn all(width: usize) -> Mask {
 
 #[test]
 fn subset_works() {
-    assert!(subset_bit(0b0110, 0b0110));
-    assert!(subset_bit(0b0110, 0b0100));
-    assert!(!subset_bit(0b0101, 0b0010));
+    assert!(subset(0b0110, 0b0110));
+    assert!(subset(0b0110, 0b0100));
+    assert!(!subset(0b0101, 0b0010));
 }
-pub fn subset_bit(sup: Mask, sub: Mask) -> bool {
+pub fn subset(sup: Mask, sub: Mask) -> bool {
     sup & sub == sub
 }
 
