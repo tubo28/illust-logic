@@ -164,3 +164,40 @@ pub fn print(input: &Input, solution: &Solution) {
         println!("");
     }
 }
+
+pub fn print_state(input: &Input, state: &State) {
+    let h = input.height * 2 + 1;
+    let w = input.width * 2 + 1;
+    let mut grid = vec![vec![' '; w]; h];
+    for i in 0..h {
+        for j in 0..w {
+            grid[i][j] = match (i % 2, j % 2) {
+                (0, 0) => '+',
+                (0, 1) => '-',
+                (1, 0) => '|',
+                _ => grid[i][j],
+            };
+        }
+    }
+    for i in 0..input.height {
+        for j in 0..input.width {
+            grid[i * 2 + 1][j * 2 + 1] = match (state.black[i] >> j & 1, state.white[i] >> j & 1) {
+                (0, 0) => ' ',
+                (0, 1) => '/',
+                (1, 0) => 'x',
+                (1, 1) => panic!("dup"),
+                _ => panic!("impossible"),
+            }
+        }
+    }
+    for i in 0..h {
+        for j in 0..w {
+            if grid[i][j] == 'x' {
+                print!("{}", "x".cyan().bold());
+            } else {
+                print!("{}", grid[i][j]);
+            }
+        }
+        println!("");
+    }
+}
