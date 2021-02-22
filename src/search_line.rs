@@ -26,11 +26,11 @@ fn search_line_impl(
                 if i + hint <= width {
                     let next = cur | mask << i;
                     // [0, i + hint) satisfies must_white constraints
-                    if distinct(next, must_white) 
+                    if distinct(next, must_white)
                         // [0, i + hint) satisfies must_black constraints
                         && subset(next, must_black & all(hint + i))
                         // The left cell doesn't touch must_black cell
-                        && !set(must_black, i + hint) 
+                        && !set(must_black, i + hint)
                     {
                         search_line_impl(
                             width,
@@ -107,10 +107,11 @@ pub fn deterministic_fill(input: &Input, state: &State) -> Option<State> {
             ActiveLine::Column(column) => {
                 let mut state_trans = state.transpose();
                 let (and, or) = search_line(&input_trans, &state_trans, column);
-                if and == all(input.width) && or == 0 {
+                if and == all(input_trans.width) && or == 0 {
                     return None;
                 }
-                let updated = apply_search_line_result(&mut state_trans, input, column, and, or);
+                let updated =
+                    apply_search_line_result(&mut state_trans, &input_trans, column, and, or);
                 state = state_trans.transpose();
 
                 column_active[column] = false;
@@ -136,6 +137,7 @@ fn apply_search_line_result(
 ) -> Mask {
     let must_black = and;
     let must_white = (!or) & all(input.width);
+    debug_assert!(must_black & must_white == 0);
 
     let new_black = minus(must_black, state.black[row]);
     let new_white = minus(must_white, state.white[row]);

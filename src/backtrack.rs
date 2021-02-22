@@ -59,15 +59,13 @@ fn solve_impl(input: &Input, state: &State) -> Option<Solution> {
     //empty.reverse();
     let empty_cells = empty;
 
-    for C {
+    for &C {
         i,
         j,
         count_black,
         count_white,
     } in empty_cells.iter()
     {
-        let i = *i;
-        let j = *j;
         // Assume that (i, j) is the opposite color of the surrounding cells
         let mut state = state.clone();
         if count_black > count_white {
