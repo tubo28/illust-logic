@@ -2,7 +2,7 @@ use crate::bitop::*;
 use colored::*;
 use std::{io::*, mem::swap, str::FromStr};
 
-pub type Mask = u64; // bit-mask of board
+pub type Mask = u64; // bit-mask of row
 pub type Hint = usize; // size of continuous black blocks
 
 #[derive(Default, Debug, Clone)]
@@ -18,8 +18,8 @@ impl Input {
         let mut input = Input::default();
         input.height = read();
         input.width = read();
-        input.row_hints.resize(input.height, Vec::new());
-        input.column_hints.resize(input.width, Vec::new());
+        input.row_hints = vec![Vec::new(); input.height];
+        input.column_hints = vec![Vec::new(); input.width];
         for i in 0..input.height {
             let n = read();
             input.row_hints[i].resize(n, 0);
@@ -37,7 +37,7 @@ impl Input {
         input
     }
 
-    pub fn flip(&self) -> Input {
+    pub fn transpose(&self) -> Input {
         let mut result = self.clone();
         swap(&mut result.height, &mut result.width);
         swap(&mut result.row_hints, &mut result.column_hints);
@@ -67,7 +67,7 @@ pub struct State {
 
 impl State {
     pub fn new(height: usize, width: usize) -> State {
-        assert!(width < std::mem::size_of::<Mask>() * 8);
+        debug_assert!(width < std::mem::size_of::<Mask>() * 8);
         State {
             height: height,
             width: width,
@@ -76,7 +76,7 @@ impl State {
         }
     }
 
-    pub fn flip(&self) -> State {
+    pub fn transpose(&self) -> State {
         let mut result = State {
             height: self.width,
             width: self.height,
@@ -96,7 +96,6 @@ impl State {
         result
     }
 
-    // todo: is_solved
     pub fn solved(&self, input: &Input) -> bool {
         for (a, b) in input.row_hints.iter().zip(self.black.iter()) {
             if a.iter().sum::<usize>() != b.count_ones() as usize {
@@ -104,6 +103,32 @@ impl State {
             }
         }
         true
+    }
+
+    pub fn white(&self, i: usize, j: usize) -> bool {
+        self.white[i] >> j & 1 == 1
+    }
+
+    pub fn black(&self, i: usize, j: usize) -> bool {
+        self.black[i] >> j & 1 == 1
+    }
+
+    pub fn empty(&self, i: usize, j: usize) -> bool {
+        !self.white(i, j) && !self.black(i, j)
+    }
+
+    pub fn set(&mut self, i: usize, j: usize, cell: Cell) {
+        debug_assert!(self.empty(i, j));
+        match cell {
+            Cell::Black => self.black[i] |= 1 << j,
+            Cell::White => self.white[i] |= 1 << j,
+        }
+    }
+
+    pub fn flip(&mut self, i: usize, j: usize) {
+        debug_assert!(!self.empty(i, j));
+        self.black[i] ^= 1 << j;
+        self.white[i] ^= 1 << j;
     }
 
     pub fn to_solution(&self) -> Solution {
@@ -132,72 +157,13 @@ pub enum Cell {
 pub type Solution = Vec<Vec<Cell>>;
 
 pub fn print(input: &Input, solution: &Solution) {
-    let h = input.height * 2 + 1;
-    let w = input.width * 2 + 1;
-    let mut grid = vec![vec![' '; w]; h];
-    for i in 0..h {
-        for j in 0..w {
-            grid[i][j] = match (i % 2, j % 2) {
-                (0, 0) => '+',
-                (0, 1) => '-',
-                (1, 0) => '|',
-                _ => grid[i][j],
-            };
-        }
-    }
     for i in 0..input.height {
         for j in 0..input.width {
-            grid[i * 2 + 1][j * 2 + 1] = match solution[i][j] {
-                Cell::White => ' ',
-                Cell::Black => 'x',
+            match solution[i][j] {
+                Cell::Black => print!("{}", "x".cyan().bold()),
+                Cell::White => print!("{}", "."),
             }
         }
-    }
-    for i in 0..h {
-        for j in 0..w {
-            if grid[i][j] == 'x' {
-                print!("{}", "x".cyan().bold());
-            } else {
-                print!("{}", grid[i][j]);
-            }
-        }
-        println!("");
-    }
-}
-
-pub fn print_state(input: &Input, state: &State) {
-    let h = input.height * 2 + 1;
-    let w = input.width * 2 + 1;
-    let mut grid = vec![vec![' '; w]; h];
-    for i in 0..h {
-        for j in 0..w {
-            grid[i][j] = match (i % 2, j % 2) {
-                (0, 0) => '+',
-                (0, 1) => '-',
-                (1, 0) => '|',
-                _ => grid[i][j],
-            };
-        }
-    }
-    for i in 0..input.height {
-        for j in 0..input.width {
-            grid[i * 2 + 1][j * 2 + 1] = match (state.black[i] >> j & 1, state.white[i] >> j & 1) {
-                (0, 0) => ' ',
-                (0, 1) => '/',
-                (1, 0) => 'x',
-                (1, 1) => panic!("dup"),
-                _ => panic!("impossible"),
-            }
-        }
-    }
-    for i in 0..h {
-        for j in 0..w {
-            if grid[i][j] == 'x' {
-                print!("{}", "x".cyan().bold());
-            } else {
-                print!("{}", grid[i][j]);
-            }
-        }
-        println!("");
+        println!()
     }
 }

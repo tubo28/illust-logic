@@ -10,6 +10,6 @@ fn main() {
     if let Some(solution) = backtrack::solve(&input) {
         print(&input, &solution);
     } else {
-        println!("impossible");
+        panic!("impossible");
     }
 }
